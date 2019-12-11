@@ -3,6 +3,7 @@
 #include <DallasTemperature.h>
 #include <EEPROM.h>
 #include <OneWire.h>
+#include <SimpleTimer.h>
 #include <U8glib.h>
 
 #define ONE_WIRE_PIN 8
@@ -24,6 +25,8 @@ float temperatureSensor;
 int plusPin = PLUS_PIN;
 int minusPin = MINUS_PIN;
 
+SimpleTimer timer;
+int screenTimeout = 10000;
 bool screenOn = true;
 
 // Initialize display.
@@ -58,6 +61,18 @@ void readTemperature(DeviceAddress deviceAddress) {
     temperatureSensor = sensors.getTempC(deviceAddress);
 }
 
+void disableDisplay() { screenOn = false; }
+
+bool enableDisplay() {
+    timer.setTimeout(screenTimeout, disableDisplay);
+    if (screenOn) {
+        return true;
+    } else {
+        screenOn = true;
+        return false;
+    }
+}
+
 void setup(void) {
     pinMode(plusPin, INPUT);
     pinMode(minusPin, INPUT);
@@ -67,10 +82,13 @@ void setup(void) {
 
     // Set font.
     u8g.setFont(u8g_font_gdb14);
+
     // Start up sensor library
     sensors.begin();
     sensors.getAddress(thermometerAddress, 0);
     temperature = EEPROM.read(temperatureEEPROMAddress);
+
+    enableDisplay();
 }
 
 void loop(void) {
@@ -80,20 +98,25 @@ void loop(void) {
     } while (u8g.nextPage());
 
     if (digitalRead(minusPin) == LOW) {
-        temperature--;
-        if (temperature < -99) {
-            temperature = -99;
+        if (enableDisplay()) {
+            temperature--;
+            if (temperature < -99) {
+                temperature = -99;
+            }
+            EEPROM.update(temperatureEEPROMAddress, temperature);
         }
-        EEPROM.update(temperatureEEPROMAddress, temperature);
         delay(100);
     }
     if (digitalRead(plusPin) == LOW) {
-        temperature++;
-        if (temperature > 99) {
-            temperature = 99;
+        if (enableDisplay()) {
+            temperature++;
+            if (temperature > 99) {
+                temperature = 99;
+            }
+            EEPROM.update(temperatureEEPROMAddress, temperature);
         }
-        EEPROM.update(temperatureEEPROMAddress, temperature);
         delay(100);
     }
     readTemperature(thermometerAddress);
+    timer.run();
 }
