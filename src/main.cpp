@@ -4,9 +4,9 @@
 #include <EEPROM.h>
 #include <OneWire.h>
 #include <PID_v1.h>
+#include <Servo.h>
 #include <SimpleTimer.h>
 #include <U8glib.h>
-#include <Servo.h>
 
 #define ONE_WIRE_PIN 8
 #define PLUS_PIN 10
@@ -28,12 +28,13 @@ DeviceAddress thermometerAddress;
 int temperature = 20;
 int temperatureEEPROMAddress = 0;
 float temperatureSensor;
-int angel;
+int angel, angelPrev;
 int plusPin = PLUS_PIN;
 int minusPin = MINUS_PIN;
 
 SimpleTimer timer;
-int screenTimeout = 10000;
+int timerID;
+int screenTimeout = 20000;
 bool screenOn = true;
 
 // PID
@@ -53,9 +54,9 @@ void draw(void) {
     char tmp2[20];
 
     if (temperature < 0) {
-        sprintf(tmp, "set     %d%cC", temperature, 0xb0);
+        sprintf(tmp, "set       %d%cC", temperature, 0xb0);
     } else {
-        sprintf(tmp, "set      %d%cC", temperature, 0xb0);
+        sprintf(tmp, "set        %d%cC", temperature, 0xb0);
     }
     char str_temperatureSensor[6];
     dtostrf(temperatureSensor, 4, 1, str_temperatureSensor);
@@ -64,15 +65,17 @@ void draw(void) {
     } else {
         sprintf(tmp1, "sensor  %s%cC", str_temperatureSensor, 0xb0);
     }
-    sprintf(tmp2, "out     %d%c", angel, 0xb0);
+    sprintf(tmp2, "out       %d%c", angel, 0xb0);
 
     if (screenOn) {
         u8g.setFont(u8g_font_gdb14);
         u8g.drawStr(15, 15, "Termostat");
         u8g.setFont(u8g_font_gdb12);
-        u8g.drawStr(0, 25, tmp);
-        u8g.drawStr(0, 50, tmp1);
-        u8g.drawStr(0, 70, tmp2);
+        int logoStep = 32;
+        int lineStep = 16;
+        u8g.drawStr(0, logoStep, tmp);
+        u8g.drawStr(0, logoStep + lineStep, tmp1);
+        u8g.drawStr(0, logoStep + lineStep * 2, tmp2);
     }
 }
 
@@ -84,7 +87,7 @@ void readTemperature(DeviceAddress deviceAddress) {
 void disableDisplay() { screenOn = false; }
 
 bool enableDisplay() {
-    timer.setTimeout(screenTimeout, disableDisplay);
+    timer.restartTimer(timerID);
     if (screenOn) {
         return true;
     } else {
@@ -117,9 +120,14 @@ void setup(void) {
     myPID.SetMode(AUTOMATIC);
 
     myservo.attach(SERVO_PIN);
+
+    timerID = timer.setInterval(screenTimeout, disableDisplay);
+
 }
 
 void loop(void) {
+    readTemperature(thermometerAddress);
+
     u8g.firstPage();
     do {
         draw();
@@ -132,8 +140,6 @@ void loop(void) {
                 temperature = -99;
             }
             EEPROM.update(temperatureEEPROMAddress, temperature);
-        } else {
-            delay(500);
         }
         delay(100);
     }
@@ -144,28 +150,26 @@ void loop(void) {
                 temperature = 99;
             }
             EEPROM.update(temperatureEEPROMAddress, temperature);
-        } else {
-            delay(500);
         }
-
         delay(100);
     }
-    readTemperature(thermometerAddress);
 
-    double gap = abs((float)temperature - temperatureSensor);  // distance away from setpoint
-    if (gap < 10) {  // we're close to setpoint, use conservative tuning parameters
+    double gap = abs((float)temperature - temperatureSensor);
+    if (gap < 10) {// Agressiv if more then 10
         myPID.SetTunings(consKp, consKi, consKd);
     } else {
-        // we're far from setpoint, use aggressive tuning parameters
         myPID.SetTunings(aggKp, aggKi, aggKd);
     }
 
     Input = (double)temperatureSensor;
     Setpoint = (double)temperature;
     myPID.Compute();
-    
-    angel = (int)Output;
-    myservo.write(angel);
+
+    angel = (90-(int)Output);
+    if (angel != angelPrev) {
+        myservo.write(angel);
+    }
+    angelPrev = angel;
 
     timer.run();
 
