@@ -21,6 +21,13 @@
 
 #ifdef SERVO_PIN
 Servo myservo;
+int angel, angelPrev;
+#define PID_MIN 0
+#define PID_MAX 90
+#endif
+
+#ifdef PWM_PIN
+int pwmOut = 0;
 #endif
 
 #ifdef ONE_WIRE_PIN
@@ -37,7 +44,6 @@ THERMISTOR thermistor(NTC_PIN,100000,3950,10000);
 int temperature = 20;
 int temperatureEEPROMAddress = 0;
 float temperatureSensor;
-int angel, angelPrev;
 
 SimpleTimer timer;
 int timerID;
@@ -72,8 +78,12 @@ void draw(void) {
     } else {
         sprintf(tmp1, "sensor  %s%cC", str_temperatureSensor, 0xb0);
     }
+#ifdef SERVO_PIN
     sprintf(tmp2, "out       %d%c", angel, 0xb0);
-
+#endif
+#ifdef PWM_PIN
+    sprintf(tmp2, "pwm       %d%%", (pwmOut * 100)/255);
+#endif
     if (screenOn) {
         u8g.setFont(u8g_font_gdb14);
         u8g.drawStr(15, 15, "Termostat");
@@ -111,6 +121,9 @@ bool enableDisplay() {
 void setup(void) {
 #ifdef BLINK_PIN
     pinMode2(BLINK_PIN, OUTPUT);
+#endif
+#ifdef PWM_PIN
+    pinMode(PWM_PIN, OUTPUT);
 #endif
     pinMode2(PLUS_PIN, INPUT);
     pinMode2(MINUS_PIN, INPUT);
@@ -185,7 +198,10 @@ void loop(void) {
     }
     angelPrev = angel;
 #endif
-
+#ifdef PWM_PIN
+    pwmOut = (int)Output;
+    analogWrite(PWM_PIN, pwmOut);
+#endif
     timer.run();
 
     // Heart_beat

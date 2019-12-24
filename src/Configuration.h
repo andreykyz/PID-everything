@@ -21,6 +21,8 @@
 
 /* PID regulator range */
 #define PID_MIN 0
-#define PID_MAX 90
+#define PID_MAX 255
+
+#define PWM_PIN 11
 
 #endif
