@@ -1,36 +1,43 @@
-// Include the graphics library.
-#include <Arduino.h>
+#include "Configuration.h"
+
+#include <DIO2.h>
+#ifdef ONE_WIRE_PIN
 #include <DallasTemperature.h>
-#include <EEPROM.h>
 #include <OneWire.h>
+#endif
+#ifdef NTC_PIN
+#include <thermistor.h>
+#endif
+#include <EEPROM.h>
 #include <PID_v1.h>
+#ifdef SERVO_PIN
 #include <Servo.h>
+#endif
 #include <SimpleTimer.h>
 #include <U8glib.h>
 
-#define ONE_WIRE_PIN 8
 #define PLUS_PIN 10
 #define MINUS_PIN 9
-#define BLINK_PIN 13
-#define SERVO_PIN 12
 
+#ifdef SERVO_PIN
 Servo myservo;
+#endif
 
-// Data wire is plugged into port 8 on the Arduino
+#ifdef ONE_WIRE_PIN
 OneWire oneWire(ONE_WIRE_PIN);
-
-// Pass our oneWire reference to Dallas Temperature.
 DallasTemperature sensors(&oneWire);
-
-// arrays to hold device addresses
 DeviceAddress thermometerAddress;
+#endif
+
+#ifdef NTC_PIN
+//                             R      B   pull-down
+THERMISTOR thermistor(NTC_PIN,100000,3950,10000);
+#endif
 
 int temperature = 20;
 int temperatureEEPROMAddress = 0;
 float temperatureSensor;
 int angel, angelPrev;
-int plusPin = PLUS_PIN;
-int minusPin = MINUS_PIN;
 
 SimpleTimer timer;
 int timerID;
@@ -79,9 +86,14 @@ void draw(void) {
     }
 }
 
-void readTemperature(DeviceAddress deviceAddress) {
+void readTemperature() {
+#ifdef ONE_WIRE_PIN
     sensors.requestTemperatures();
-    temperatureSensor = sensors.getTempC(deviceAddress);
+    temperatureSensor = sensors.getTempC(thermometerAddress);
+#endif
+#ifdef NTC_PIN
+    temperatureSensor = thermistor.read();
+#endif
 }
 
 void disableDisplay() { screenOn = false; }
@@ -97,43 +109,44 @@ bool enableDisplay() {
 }
 
 void setup(void) {
-    pinMode(BLINK_PIN, OUTPUT);
-    pinMode(plusPin, INPUT);
-    pinMode(minusPin, INPUT);
+#ifdef BLINK_PIN
+    pinMode2(BLINK_PIN, OUTPUT);
+#endif
+    pinMode2(PLUS_PIN, INPUT);
+    pinMode2(MINUS_PIN, INPUT);
     // turn on pullup resistors
-    digitalWrite(plusPin, HIGH);
-    digitalWrite(minusPin, HIGH);
+    digitalWrite2(PLUS_PIN, HIGH);
+    digitalWrite2(MINUS_PIN, HIGH);
 
-    // Set font.
-    // u8g.setFont(u8g_font_gdb12);
-
-    // Start up sensor library
+#ifdef ONE_WIRE_PIN
     sensors.begin();
     sensors.getAddress(thermometerAddress, 0);
     temperature = EEPROM.read(temperatureEEPROMAddress);
+#endif
 
-    // turn the PID on
-    myPID.SetMode(AUTOMATIC);
     enableDisplay();
 
-    myPID.SetOutputLimits(0, 90);
+    myPID.SetOutputLimits(PID_MIN, PID_MAX);
     myPID.SetMode(AUTOMATIC);
 
+#ifdef SERVO_PIN
     myservo.attach(SERVO_PIN);
+#endif
 
     timerID = timer.setInterval(screenTimeout, disableDisplay);
 
 }
 
 void loop(void) {
-    readTemperature(thermometerAddress);
+
+    readTemperature();
 
     u8g.firstPage();
     do {
         draw();
     } while (u8g.nextPage());
 
-    if (digitalRead(minusPin) == LOW) {
+    if (digitalRead2(MINUS_PIN) == LOW) {
         if (enableDisplay()) {
             temperature--;
             if (temperature < -99) {
@@ -143,7 +156,7 @@ void loop(void) {
         }
         delay(100);
     }
-    if (digitalRead(plusPin) == LOW) {
+    if (digitalRead2(PLUS_PIN) == LOW) {
         if (enableDisplay()) {
             temperature++;
             if (temperature > 99) {
@@ -165,16 +178,20 @@ void loop(void) {
     Setpoint = (double)temperature;
     myPID.Compute();
 
-    angel = (90-(int)Output);
+#ifdef SERVO_PIN
+    angel = (PID_MAX-(int)Output);
     if (angel != angelPrev) {
         myservo.write(angel);
     }
     angelPrev = angel;
+#endif
 
     timer.run();
 
     // Heart_beat
-    digitalWrite(BLINK_PIN, HIGH);
+#ifdef BLINK_PIN
+    digitalWrite2(BLINK_PIN, HIGH);
     delay(10);
-    digitalWrite(BLINK_PIN, LOW);
+    digitalWrite2(BLINK_PIN, LOW);
+#endif
 }
