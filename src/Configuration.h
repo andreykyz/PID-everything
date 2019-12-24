@@ -23,6 +23,13 @@
 #define PID_MIN 0
 #define PID_MAX 255
 
-#define PWM_PIN 11
+// #define PWM_PIN 11
+
+#define AC_PHASE_CONTROL
+#ifdef AC_PHASE_CONTROL
+#define DETECT_ZERO_CROSS_PIN 2
+#define TRIAC_PIN 11
+#define TRIAC_PULSE 4
+#endif
 
 #endif

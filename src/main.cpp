@@ -15,6 +15,11 @@
 #endif
 #include <SimpleTimer.h>
 #include <U8glib.h>
+#ifdef AC_PHASE_CONTROL
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#endif
+
 
 #define PLUS_PIN 10
 #define MINUS_PIN 9
@@ -118,12 +123,38 @@ bool enableDisplay() {
     }
 }
 
+#ifdef AC_PHASE_CONTROL
+void zerroCrossingInterrupt(){
+    TCCR1B = 0x04;
+    TCNT1 = 0;
+}
+
+ISR(TIMER0_COMPA_vect){
+    digitalWrite(TRIAC_PIN,HIGH);
+    TCNT1  = 65536 - TRIAC_PULSE;
+}
+
+ISR(TIMER1_OVF_vect){
+    digitalWrite2(TRIAC_PIN, LOW);
+    TCCR1B = 0x00;
+}
+#endif
 void setup(void) {
 #ifdef BLINK_PIN
     pinMode2(BLINK_PIN, OUTPUT);
 #endif
 #ifdef PWM_PIN
     pinMode(PWM_PIN, OUTPUT);
+#endif
+#ifdef AC_PHASE_CONTROL
+    pinMode(DETECT_ZERO_CROSS_PIN, INPUT);
+    digitalWrite(DETECT_ZERO_CROSS_PIN, HIGH);
+    pinMode2(TRIAC_PIN, OUTPUT);
+    OCR1A = 100;
+    TIMSK1 = 0x3;
+    TCCR1A = 0x00;
+    TCCR1B = 0x00;
+    attachInterrupt(0, zerroCrossingInterrupt, RISING);
 #endif
     pinMode2(PLUS_PIN, INPUT);
     pinMode2(MINUS_PIN, INPUT);
@@ -201,6 +232,9 @@ void loop(void) {
 #ifdef PWM_PIN
     pwmOut = (int)Output;
     analogWrite(PWM_PIN, pwmOut);
+#endif
+#ifdef AC_PHASE_CONTROL
+    OCR1A = (unsigned int)OUTPUT;
 #endif
     timer.run();
 
