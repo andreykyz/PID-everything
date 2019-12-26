@@ -27,8 +27,6 @@
 #ifdef SERVO_PIN
 Servo myservo;
 int angel, angelPrev;
-#define PID_MIN 0
-#define PID_MAX 90
 #endif
 
 #ifdef PWM_PIN
